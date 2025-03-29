@@ -1,0 +1,23 @@
+﻿@page
+@model multi_auth.Pages.IndexModel
+@{
+    Layout = "/Pages/Shared/_Layout.cshtml";
+    ViewData["Title"] = "Página de Autenticación";
+}
+
+<div class="container">
+    <h1>@ViewData["Title"]</h1>
+    <p>Selecciona un proveedor para iniciar sesión:</p>
+
+    @if (User.Identity.IsAuthenticated)
+    {
+        <a href="/Profile">Ir a mi perfil</a>
+        <a href="/logout">Cerrar sesión</a>
+    }
+    else
+    {
+        <a href="/login/Google">Iniciar sesión con Google</a>
+        <a href="/login/Facebook">Iniciar sesión con Facebook</a>
+        <a href="/login/GitHub">Iniciar sesión con GitHub</a>
+    }
+</div>

@@ -1,0 +1,21 @@
+﻿@page
+@model multi_auth.Pages.ProfileModel
+@using System.Security.Claims
+@{
+    Layout = "/Pages/Shared/_Layout.cshtml";
+    ViewData["Title"] = "Perfil de Usuario";
+
+    var user = User;
+    var userName = user.Identity.Name;
+    var userEmail = user.FindFirst(ClaimTypes.Email)?.Value;
+    var userId = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+}
+
+<div class="container">
+    <h1>Bienvenido, @userName!</h1>
+
+    <p><strong>Email:</strong> @userEmail</p>
+    <p><strong>Identificador del usuario:</strong> @userId</p>
+
+    <a href="/logout">Cerrar sesión</a>
+</div>
