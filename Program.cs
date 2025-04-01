@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using multi_auth.Configuration;
+using multi_auth.Middlewares;
 using multi_auth.Storages;
 using System.Security.Claims;
 
@@ -97,6 +98,7 @@ var app = builder.Build();
 
 app.UseStaticFiles();
 
+app.UseMiddleware<RefreshCookie>();
 app.UseAuthentication();
 app.UseAuthorization();
 
