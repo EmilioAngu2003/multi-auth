@@ -1,9 +1,12 @@
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using multi_auth.Configuration;
+using multi_auth.Storages;
+using System.Security.Claims;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Services.AddSingleton<RefreshCookieStorage>();
 
 var authSettings = new AuthSettings();
 builder.Configuration.GetSection("Authentication").Bind(authSettings);
@@ -34,6 +37,20 @@ builder.Services.AddAuthentication(options =>
         options.Cookie.HttpOnly = true;
         options.Cookie.SameSite = SameSiteMode.Strict;
         options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+        options.Events.OnSigningIn = async context =>
+        {
+            var userId = context.Principal?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var refreshCookieId = Guid.NewGuid().ToString();
+
+            var refreshCookieStorage = context.HttpContext.RequestServices.GetRequiredService<RefreshCookieStorage>();
+            refreshCookieStorage.AddRefreshCookie(userId, refreshCookieId);
+
+            var identity = context.Principal?.Identity as ClaimsIdentity;
+            if (identity != null)
+            {
+                identity.AddClaim(new Claim("refreshCookieId", refreshCookieId));
+            }
+        };
     })
     .AddGoogle(options =>
     {
@@ -94,7 +111,28 @@ app.MapGet("/login/{provider}", (string provider, HttpContext context) =>
 
 app.MapGet("/logout", async context =>
 {
-    await context.SignOutAsync();
+    var userId = context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+    var refreshCookieId = context.User.FindFirst("refreshCookieId")?.Value;
+
+    var refreshCookieStorage = context.RequestServices.GetRequiredService<RefreshCookieStorage>();
+    refreshCookieStorage.RevokeSingleCookie(userId, refreshCookieId);
+
+    await context.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+    await context.SignOutAsync("Refresh-Cookie");
+
+    context.Response.Redirect("/");
+});
+
+app.MapGet("/logout/all", async context =>
+{
+    var userId = context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+    var refreshCookieStorage = context.RequestServices.GetRequiredService<RefreshCookieStorage>();
+
+    refreshCookieStorage.RevokeAllCookies(userId);
+
+    await context.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+    await context.SignOutAsync("Refresh-Cookie");
+
     context.Response.Redirect("/");
 });
 
