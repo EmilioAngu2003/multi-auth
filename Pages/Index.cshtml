@@ -12,12 +12,12 @@
     @if (User.Identity.IsAuthenticated)
     {
         <a href="/Profile">Ir a mi perfil</a>
-        <a href="/logout">Cerrar sesión</a>
+        <a href="/auth/logout">Cerrar sesión</a>
     }
     else
     {
-        <a href="/login/Google">Iniciar sesión con Google</a>
-        <a href="/login/Facebook">Iniciar sesión con Facebook</a>
-        <a href="/login/GitHub">Iniciar sesión con GitHub</a>
+        <a href="/auth/login/Google">Iniciar sesión con Google</a>
+        <a href="/auth/login/Facebook">Iniciar sesión con Facebook</a>
+        <a href="/auth/login/GitHub">Iniciar sesión con GitHub</a>
     }
 </div>

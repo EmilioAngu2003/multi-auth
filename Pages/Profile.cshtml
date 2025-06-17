@@ -6,9 +6,9 @@
     ViewData["Title"] = "Perfil de Usuario";
 
     var user = User;
-    var userName = user.Identity.Name;
-    var userEmail = user.FindFirst(ClaimTypes.Email)?.Value;
-    var userId = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+    var userName = user.Identity?.Name ?? "Usuario desconocido";
+    var userEmail = user.FindFirst(ClaimTypes.Email)?.Value ?? "No disponible";
+    var userId = user.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "No disponible";
 }
 
 <div class="container">
@@ -17,5 +17,6 @@
     <p><strong>Email:</strong> @userEmail</p>
     <p><strong>Identificador del usuario:</strong> @userId</p>
 
-    <a href="/logout">Cerrar sesión</a>
+    <a href="/auth/logout">Cerrar sesión</a>
+    <a href="/auth/logout/all">Cerrar todas las sesiones</a>
 </div>
