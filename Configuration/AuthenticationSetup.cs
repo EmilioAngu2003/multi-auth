@@ -54,7 +54,7 @@ public static class AuthenticationSetup
 
     public static IServiceCollection AddProviders(this IServiceCollection services, IConfiguration configuration)
     {
-        var authSettings = configuration.GetSection("AuthSettings").Get<AuthSettings>();
+        var authSettings = configuration.GetSection("Authentication").Get<AuthSettings>();
 
         services.AddScoped<AuthEvents>();
 
