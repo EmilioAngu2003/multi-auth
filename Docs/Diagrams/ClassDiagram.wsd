@@ -1,0 +1,193 @@
+@startuml multi-auth
+' === PACKAGES ===
+package "AppSettings"{
+    class AuthSettings {
+        +Google : GoogleAuth
+        +GitHub : GitHubAuth
+        +Facebook : FacebookAuth
+    }
+
+    class GoogleAuth {
+        +ClientId : string
+        +ClientSecret : string
+        +CallbackPath : string
+    }
+
+    class GitHubAuth {
+        +ClientId : string
+        +ClientSecret : string
+        +CallbackPath : string
+    }
+
+    class FacebookAuth {
+        +AppId : string
+        +AppSecret : string
+        +CallbackPath : string
+    }
+
+    AuthSettings --> GoogleAuth : has
+    AuthSettings --> GitHubAuth : has
+    AuthSettings --> FacebookAuth : has
+
+    class JwtSettings {
+        +SecretKey : string
+        +Issuer : string
+        +Audience : string
+    }
+
+    class SecurityNotificationSettings {
+        +SmtpServer : string
+        +SmtpPort : int
+        +SenderEmail : string
+        +SenderPassword : string
+        +SenderName : string
+        +EnableSsl : bool
+    }
+
+    class TimeSettings {
+        +CookieLifetime : TimeSpan
+        +JwtLifetime : TimeSpan
+        +TokenLifetime : TimeSpan
+        +Cleanup : CleanupSettings
+        +GetNextCleanupTime : Func<DateTime, DateTime>
+    }
+
+    class CleanupSettings {
+        +Start : string
+        +Interval : TimeSpan
+    }
+
+    TimeSettings --> CleanupSettings : has
+}
+
+package "Storages" {
+    interface IRefreshTokenStorage {
+        +GenerateRefreshTokenAsync(userId: string) : Task<string>
+        +StoreRefreshTokenAsync(userId: string, refreshToken: string) : Task
+        +ValidateRefreshTokenAsync(userId: string, refreshToken: string) : Task<bool>
+        +RevokeRefreshTokenAsync(userId: string, refreshToken: string) : Task
+        +ExpireAllRefreshTokensAsync(userId: string) : Task
+        +IsRevokedRefreshTokenAsync(userId: string, refreshToken: string) : Task<bool>
+        +IsExpiredRefreshTokenAsync(userId: string, refreshToken: string) : Task<bool>
+        +RotateRefreshTokenAsync(userId: string, refreshToken: string) : Task<string>
+    }
+
+    interface IRefreshTokenStorageCleanup {
+        +CleanupExpiredTokens() : Task
+    }
+
+    class InMemoryRefreshTokenStorage {
+        -_timeSettings : TimeSettings (injection)
+    }
+
+    InMemoryRefreshTokenStorage ..|> IRefreshTokenStorage
+    InMemoryRefreshTokenStorage ..|> IRefreshTokenStorageCleanup
+    InMemoryRefreshTokenStorage --> TimeSettings : <<inject>>
+}
+
+package "Services" {
+    interface ISecurityNotificationService {
+        +NotifyPossibleTokenTheftAsync(userId: string, userEmail: string, ipAddress: string, userAgent: string) : Task
+    }
+
+    class EmailSecurityNotificationService {
+        -_settings : SecurityNotificationSettings (injection)
+    }
+
+    EmailSecurityNotificationService ..|> ISecurityNotificationService
+    EmailSecurityNotificationService --> SecurityNotificationSettings : <<inject>>
+
+    class TokenCleanupService {
+        -_cleanup : IRefreshTokenStorageCleanup
+        -_getNextCleanupTime : Func<DateTime, DateTime>
+        +ExecuteAsync(stoppingToken: CancellationToken) : Task
+    }
+
+    TokenCleanupService --> IRefreshTokenStorageCleanup : <<inject>>
+    TokenCleanupService --> TimeSettings : <<inject>>
+}
+
+' === EXTEND CLASS ===
+class AuthenticationSetup {
+    +ConfigureAuthentication(services: IServiceCollection, configuration: IConfiguration) : IServiceCollection
+}
+
+class ServiceSetup {
+    +RegisterServices(services: IServiceCollection, configuration: IConfiguration) : IServiceCollection
+}
+
+' === EVENT CLASS ===
+class AuthEvents {
+    -_refreshTokenStorage : IRefreshTokenStorage
+    -_cookieUtils : CookieUtils
+    -_jwtUtils : JwtUtils
+    +CreatingTicket(context: OAuthCreatingTicketContext) : Task
+    +TicketReceived(context: TicketReceivedContext) : Task
+}
+
+class JwtEvents {
+    -_jwtUtils : JwtUtils
+    -_cookieUtils : CookieUtils
+    -_refreshTokenStorage : IRefreshTokenStorage
+    -_securityNotificationService : ISecurityNotificationService
+    +MessageReceived(context: MessageReceivedContext) : Task
+    +AuthenticationFailed(context: AuthenticationFailedContext) : Task
+    +Challenge(context: JwtBearerChallengeContext) : Task
+    -UpdateToken(context: HttpContext, principal: ClaimsPrincipal) : Task
+    -ShouldUpdateToken(context: HttpContext) : Task<(bool, ClaimsPrincipal?)>
+}
+
+' === UTILITY CLASS ===
+class JwtUtils {
+    -_settings : JwtSettings
+    -_tokenLifetime : TimeSpan
+    +GenerateToken(claims: IEnumerable<Claim>) : string
+    +ValidateToken(token: string, validateLifetime: bool = true) : ClaimsPrincipal?
+}
+
+class CookieUtils {
+    -_cookieLifetime : TimeSpan
+    +SetAuthenticationCookie(response: HttpResponse, key: string, value: string) : void
+}
+
+' === CLASS INHERITANCE ===
+AuthEvents ..|> OAuthEvents
+JwtEvents ..|> JwtBearerEvents
+
+' === DEPENDENCIES ===
+JwtUtils --> JwtSettings : uses
+JwtUtils --> TimeSettings : <<inject>>
+
+CookieUtils --> TimeSettings : <<inject>>
+
+AuthEvents --> IRefreshTokenStorage : <<inject>>
+AuthEvents --> CookieUtils : <<inject>>
+AuthEvents --> JwtUtils : <<inject>>
+
+JwtEvents --> JwtUtils : <<inject>>
+JwtEvents --> CookieUtils : <<inject>>
+JwtEvents --> IRefreshTokenStorage : <<inject>>
+JwtEvents --> ISecurityNotificationService : <<inject>>
+
+AuthenticationSetup --> JwtSettings : uses (GetSection("JwtSettings"))
+AuthenticationSetup --> AuthSettings : uses (GetSection("Authentication"))
+AuthenticationSetup --> JwtEvents : registers (AddScoped)
+AuthenticationSetup --> AuthEvents : registers (AddScoped)
+
+ServiceSetup --> TimeSettings : configures
+ServiceSetup --> SecurityNotificationSettings : configures
+ServiceSetup --> CookieUtils : registers (AddScoped)
+ServiceSetup --> JwtUtils : registers (AddScoped)
+ServiceSetup --> IRefreshTokenStorage : registers (AddSingleton)
+ServiceSetup --> InMemoryRefreshTokenStorage : implements IRefreshTokenStorage
+ServiceSetup --> IRefreshTokenStorageCleanup : registers (AddSingleton via InMemoryRefreshTokenStorage)
+ServiceSetup --> TokenCleanupService : registers as IHostedService
+ServiceSetup --> ISecurityNotificationService : registers (AddScoped)
+ServiceSetup --> EmailSecurityNotificationService : implements ISecurityNotificationService
+
+' === PROGRAM ===
+class Program
+Program --> AuthenticationSetup : ConfigureAuthentication()
+Program --> ServiceSetup : RegisterServices()
+
+@enduml
